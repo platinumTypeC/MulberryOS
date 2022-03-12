@@ -1,0 +1,3 @@
+dist/
+bootloader/target
+kernel/target
