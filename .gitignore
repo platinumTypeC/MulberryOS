@@ -1,3 +1,4 @@
 dist/
 bootloader/target
 kernel/target
+Mulberry.img
