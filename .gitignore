@@ -1,6 +1,8 @@
 dist/
-bootloader/target
-kernel/target
-Mulberry.img
-Session.vim
-**.lock
+**/target
+**/target
+/**/*.img
+*.img
+/**/*.vim
+*.vim
+/**/*.lock
