@@ -7,6 +7,6 @@ A rust-based Expiremental OS.
 ## Building
 
 Prerequisite:
-  * Rust Nightly with rust-src. check `INSTALL.md` on how to install that
+  * Rust Nightly with rust-src. check <a href ="https://github.com/platinumTypeC/MulberryOS/blob/main/RUST.md">`RUST.md`</a> on how to switch to nightly.
   * gnu-make with linux or wsl
   * qemu on linux or windows. must be in path
