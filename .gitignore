@@ -3,3 +3,4 @@ bootloader/target
 kernel/target
 Mulberry.img
 Session.vim
+*.lock
