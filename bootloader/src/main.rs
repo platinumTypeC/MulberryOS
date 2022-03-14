@@ -8,8 +8,10 @@ extern crate alloc;
 
 use alloc::boxed::Box;
 use alloc::string::String;
+use alloc::vec::Vec;
 use alloc::vec;
 use crate::types::GraphicInfo;
+use crate::types::BootInfo;
 use uefi::prelude::*;
 use uefi::proto::media::file::*;
 use uefi::proto::media::fs::SimpleFileSystem;
@@ -42,7 +44,7 @@ unsafe impl FrameAllocator<Size4KiB> for UEFIFrameAllocator<'_> {
 }
 
 #[entry]
-fn efi_main(_image: Handle, mut system_table: SystemTable<Boot>) -> Status {
+fn efi_main(image: Handle, mut system_table: SystemTable<Boot>) -> Status {
     uefi_services::init(&mut system_table).expect_success("failed to initialize utilities");
 
     // output firmware-vendor (CStr16 to Rust string)
@@ -122,9 +124,53 @@ fn efi_main(_image: Handle, mut system_table: SystemTable<Boot>) -> Status {
         Efer::update(|f| f.insert(EferFlags::NO_EXECUTE_ENABLE));
     }
 
-    page_table::map_elf(&elf, &mut page_table, &mut UEFIFrameAllocator(bs))
-        .expect("failed to map ELF");
-    
+    page_table::map_elf(&elf, &mut page_table, &mut UEFIFrameAllocator(bs));
+ 
+    page_table::map_stack(
+        config.kernel_stack_address,
+        config.kernel_stack_size,
+        &mut page_table,
+        &mut UEFIFrameAllocator(bs),
+    )
+    .expect("failed to map stack");
+    page_table::map_physical_memory(
+        config.physical_memory_offset,
+        max_phys_addr,
+        &mut page_table,
+        &mut UEFIFrameAllocator(bs),
+    );
+    // recover write protect
+    unsafe {
+        Cr0::update(|f| f.insert(Cr0Flags::WRITE_PROTECT));
+    }
+
+    info!("exit boot services");
+
+    let mut memory_map = Vec::with_capacity(128);
+
+    let (_rt, mmap_iter) = system_table
+        .exit_boot_services(image, mmap_storage)
+        .expect_success("Failed to exit boot services");
+    // NOTE: alloc & log can no longer be used
+
+    info!("should not");
+
+    for desc in mmap_iter {
+        memory_map.push(desc);
+    }
+
+    // construct BootInfo
+    let bootinfo = BootInfo {
+        memory_map,
+        physical_memory_offset: config.physical_memory_offset,
+        graphic_info,
+        acpi2_rsdp_addr: acpi2_addr as u64,
+        smbios_addr: smbios_addr as u64,
+        initramfs_addr,
+        initramfs_size,
+        cmdline: config.cmdline,
+    };
+    let stacktop = config.kernel_stack_address + config.kernel_stack_size * 0x1000;
     return Status::SUCCESS;
 }
 
@@ -142,7 +188,6 @@ fn check_revision(rev: uefi::table::Revision) {
 
 fn open_file(bs: &BootServices, path: &str) -> RegularFile {
     info!("opening file: {}", path);
-    // FIXME: use LoadedImageProtocol to get the FileSystem of this image
     let fs = bs
         .locate_protocol::<SimpleFileSystem>()
         .expect_success("failed to get FileSystem");
